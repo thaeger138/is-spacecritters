@@ -1,7 +1,294 @@
 <!DOCTYPE html>
 <html>
-<body>
-<h1>Hello World</h1>
-<p>I'm hosted with GitHub Pages.</p>
-</body>
+	<head>
+		<meta charset="utf-8">
+		<title>My first three.js app</title>
+		<style>
+			p {text-align: center; margin-left: -230px;}
+			body {margin-left: 230px;}
+		</style>
+	</head>
+
+	<body style="background-color:black;">
+		<p>
+			<label for="alienMoveCode", style="color:white;">Move Code:</label>
+			<textarea id="alienMoveCode" name="alienMoveCode" rows="3" cols="40">random</textarea>
+			<label for="alienActionCode", style="color:white;">Action Code:</label>
+			<textarea id="alienActionCode" name="alienActionCode" rows="3" cols="40">harvest</textarea>
+			<br></br>
+			<button onclick="runGame()">Run</button>
+			<button onclick="stop()">Stop</button><br></br>
+			<label for="checkbox", style="color:white;">Toggle energy map:</label>
+			<input type="checkbox" id="myCheck" onclick="toggleEnergy()">
+		</p>
+
+		<script src="js/three.js"></script>
+		<script src="js/parser.js"></script>
+		<script src="js/star.js"></script>
+		<script src="js/command.js"></script>
+		<script src="js/operator.js"></script>
+		<script src="js/alien.js"></script>
+		<script>
+			var scale = 0.7;
+			var turn = 0;
+			var numberOfStars = 5;
+			var alienCap = 100;
+			var stars = [];
+			var commands;
+			var parser;
+			var fightLines = [];
+			var energyMapCubes = [];
+			var alienLookup = new Map();
+			var storedMoveCode = ["if [dist star < 2 & id % 2] skip random", "random"];
+			var storedActionCode = ["if [energy > 50 & alienCount < 100] duplicate if [dist alien <= 3 & energy > 50] fight 5 harvest", "harvest"];
+
+			const scene = new THREE.Scene();
+			const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 100 );
+
+			const renderer = new THREE.WebGLRenderer();
+			renderer.setSize( window.innerWidth * scale, window.innerHeight * scale);
+			document.body.appendChild(renderer.domElement);
+
+			const gridSize = 25;
+			const size = gridSize;
+			const divisions = gridSize;
+
+			const gridHelper = new THREE.GridHelper( size, divisions );
+			gridHelper.position.set(gridSize-Math.ceil(gridSize/2),0,gridSize-Math.ceil(gridSize/2));
+			scene.add( gridHelper );
+
+			var angle = Math.PI/2;
+			var dAngle = Math.PI/24;
+			var radius = gridSize * 1.2;
+			// camera.rotation.x = (-Math.PI / 12);
+			camera.position.x = gridSize-Math.ceil(gridSize/2);
+			camera.position.y = Math.ceil(gridSize/2);
+			camera.position.z = radius + gridSize-Math.ceil(gridSize/2);
+
+			renderer.render( scene, camera );
+
+			//map that holds positions for stars and aliens. energy map for aliens to harvest from
+			var map = Array.from(Array(gridSize), () => new Array(gridSize));
+			for(var i = 0; i<gridSize; i++) {
+				for(var j = 0; j<gridSize; j++) {
+					map[i][j] = [];
+				}
+			}
+			var initMap = map;
+			var energyMap = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
+
+			//generate x amount of random stars, also have static version
+			var alpha = new Star(8,4,90,0xFf5900);
+			var beta = new Star(3,7,70,0xFff100);
+			var gamma = new Star(12,12,60,0xffffff);
+			var setStars = [alpha, beta, gamma];
+			var starEnergyArray = [50, 50, 52, 55, 60, 65, 67, 72, 75, 75, 75, 80, 90];
+			var starColors = [0xd91111 ,0xe9f022, 0xffffff];
+
+			for(var i = 0; i < numberOfStars; i++) {
+				let starEnergy = starEnergyArray[Math.floor(Math.random() * (starEnergyArray.length))];
+				//need to fix star colors
+				let starColor = starColors[Math.floor(starEnergy / 70)];
+				let x = Math.floor(Math.random() * (gridSize));
+				let z = Math.floor(Math.random() * (gridSize));
+				if(i != 0) {
+					while(distanceToNearestStar(x,z) < 5) {
+						x = Math.floor(Math.random() * (gridSize));
+						z = Math.floor(Math.random() * (gridSize));
+					}
+				}
+				stars.push(new Star(x, z, starEnergy, starColor));
+			}
+			console.log(stars);
+
+			var myAlien = new Alien(0xff00ff, 1, 2);
+			// var myAlien = new Alien(0xffffff, 1, 2);
+			var gorg = new Alien(0x00ffcd, 1, 2);
+			// var borg = new Alien(0x4efc03, 3, 2);
+			// var florg = new Alien(0x00c300, 10, 1)
+			var Aliens = [myAlien, gorg];
+			for(var i = 0; i < Aliens.length; i++) {
+				alienLookup.set(Aliens[i].cubeMat.color, Aliens[i]);
+				if(i === 0) continue;
+				Aliens[i].moveCode = storedMoveCode[i-1];
+				Aliens[i].actionCode = storedActionCode[i-1];
+			}
+
+			function test() {
+				return;
+			}
+
+			function step() {
+				console.time('test');
+				test();
+				turn++;
+				// console.time('resetTurn');
+				resetTurn();
+				// console.timeEnd('resetTurn');
+				for(var i = 0; i < Aliens.length; i++) {
+					Aliens[i].executeMove();
+				}
+				for(var i = 0; i < Aliens.length; i++) {
+					Aliens[i].executeAction();
+				}
+				renderer.render( scene, camera );
+				if(Aliens.length === 1) {
+					stop();
+					alert("An alien has won!");
+				}
+				console.timeEnd('test');
+			}
+
+			function resetTurn() {
+				for(var i = 0; i < gridSize; i++) {
+					for(var j = 0; j < gridSize; j++) {
+						map[i][j] = [];
+					}
+				}
+				for(var i = 0; i < fightLines.length; i++) {
+					scene.remove(fightLines[i]);
+				}
+				fightLines = [];
+			}
+
+			function updateCubeOnMap(cube) {
+				map[cube.position.x][cube.position.z].push(cube);
+			}
+
+			function stop(){
+				clearInterval(loopInt);
+			}
+			
+			function getRandom() {
+				return Math.round(Math.random() * 3) - 1;
+			}
+
+			function distance(x1,y1,x2,y2) {
+				return Math.sqrt(Math.pow(x1 - x2,2) + Math.pow(y1 - y2, 2));
+			}
+
+			function distanceToNearestStar(x,z) {
+				let closestDistance = 101;
+				for(var i = 0; i < stars.length; i++) {
+					if(distance(x,z,stars[i].position[0],stars[i].position[2]) < closestDistance) {
+						closestDistance = distance(x,z,stars[i].position[0],stars[i].position[2]);
+					}
+				}
+				return (closestDistance >= 101) ? -1 : closestDistance;
+			}
+
+			function distanceToNearestAlien(cube, perception) {
+				let color = cube.material.color;
+				let x = cube.position.x;
+				let z = cube.position.z;
+				let closestDistance = [-1,-1,-1];
+				for(var i = Math.max(0,x-perception); i < Math.min(x+perception,gridSize); i++) {
+					for(var j = Math.max(0,z-perception); j < Math.min(z+perception,gridSize); j++) {
+						for(var k = 0; k < map[i][j].length; k++) {
+							if(map[i][j][k].material.color !== color) {
+								closestDistance = [i,k,j];
+							}
+						}
+					}
+				}
+				return closestDistance;
+			}
+			
+			function isInBounds(p1, p2) {
+				if(p1 + p2 >= 0 && p1 + p2 < gridSize) return true;
+				return false;
+			}
+			
+			function toggleEnergy() {
+				var checkBox = document.getElementById("myCheck");
+				let material = new THREE.MeshBasicMaterial({color: 0xFFFFFFF});
+				material.transparent = true;
+				material.opacity = 0.2;
+				if (checkBox.checked == true){
+					for(var i = 0; i < gridSize; i++) {
+						for(var j = 0; j < gridSize; j++) {
+							const geometry = new THREE.BoxGeometry(1, energyMap[i][j] / 10, 1);
+							const cube = new THREE.Mesh(geometry, material);
+							cube.position.set(i,energyMap[i][j] / 20,j);
+							scene.add(cube);
+							energyMapCubes.push(cube);
+						}
+					}
+				} else {
+					for(var i = 0; i < energyMapCubes.length; i++) {
+						scene.remove(energyMapCubes[i]);
+					}
+				}
+				renderer.render( scene, camera );
+			}
+
+			function init() {
+				console.log("run button clicked");
+
+				//init stars geometry and position, and add them to the scene
+				for(var i = 0; i < stars.length; i++) {
+					stars[i].geometry = new THREE.Mesh(new THREE.SphereGeometry(stars[i].energy/200, 32, 32), stars[i].starMat);
+					stars[i].geometry.position.set(stars[i].position[0],0,stars[i].position[2]);
+    				scene.add(stars[i].geometry);
+				}
+
+				//init energy map
+				for(var i = 0; i < gridSize; i++) {
+					for(var j = 0; j < gridSize; j++) {
+						stars.forEach(star => {
+							energyMap[i][j] += Math.floor(2.5*star.energy*Math.exp(-(distance(i,j,star.position[0],star.position[2]))));
+						});
+					}
+				}
+
+				// alien code parsing
+				for (var i = 0; i < Aliens.length; i++) {
+					if(i === 0) {
+						Aliens[i].moveCode = document.getElementById("alienMoveCode").value;
+						Aliens[i].actionCode = document.getElementById("alienActionCode").value;
+					}
+					let moveCode = Aliens[i].moveCode;
+					let actionCode = Aliens[i].actionCode;
+					
+					moveParser = new Parser(moveCode);
+					actionParser = new Parser(actionCode);
+					tempMove = moveParser.parse();
+					tempAction = actionParser.parse();
+					moveCommands = moveParser.organizeCommands(tempMove);
+					actionCommands = actionParser.organizeCommands(tempAction);
+					Aliens[i].moveCode = moveCommands;
+					Aliens[i].actionCode = actionCommands;
+					console.log(Aliens[i]);
+					console.log("-- move commands --");
+					console.log(moveCommands);
+					console.log("-- action commands --");
+					console.log(actionCommands);
+				}
+
+				//add event listener that allows the user to rotate the camera around the grid
+				document.addEventListener('keydown', function(event) {
+					if(event.keyCode == 65) { //A key
+						angle += dAngle;
+						camera.position.x = gridSize-Math.ceil(gridSize/2) + radius * Math.cos(angle);
+						camera.position.z = gridSize-Math.ceil(gridSize/2) + radius * Math.sin(angle);
+						camera.rotation.y -= dAngle;
+						renderer.render( scene, camera );
+					} else if(event.keyCode == 68) { // D key
+						angle -= dAngle;
+						camera.position.x = gridSize-Math.ceil(gridSize/2) + radius * Math.cos(angle);
+						camera.position.z = gridSize-Math.ceil(gridSize/2) + radius * Math.sin(angle);
+						camera.rotation.y += dAngle;
+						renderer.render( scene, camera );
+					}
+				});
+			}
+
+			function runGame() {
+				console.time('init');
+				init();
+				console.timeEnd('init');
+				loopInt = setInterval(step, 200);
+			}
+		</script>
+	</body>
 </html>
