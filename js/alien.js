@@ -61,6 +61,9 @@ class Alien {
             },
             spotEnergy: function(args, i, alien) {
                 return energyMap[alien.cubes[i].position.x][alien.cubes[i].position.z];
+            },
+            turn: function(args, i, alien) {
+                return (turn);
             }
         };
         this.operatorLookUp = {
