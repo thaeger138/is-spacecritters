@@ -65,7 +65,7 @@ class Parser {
   parse() {
     //explain this
     let movement = /^(up|down|left|right|random|skip)$/;
-    let playerInterface = /^(dist|energy|id|turn|spotEnergy|alienCount|pos)$/;
+    let playerInterface = /^(dist|energy|id|turn|spotEnergy|alienCount|pos|perception)$/;
     let action = /^(fight|harvest|duplicate)$/;
     let operator = /([<>=&%|]|[!=]|[>=]|[<=])/;
     let digit = /[0-9]/;
