@@ -50,6 +50,9 @@ class Alien {
                         return;
                 }
             },
+            perception: function(args, i, alien) {
+                return alien.perception;
+            },
             alienCount: function(args, i, alien) {
                 return alien.cubes.length;
             },
@@ -130,7 +133,8 @@ class Alien {
         let dist = distanceToNearestAlien(this.cubes[i],this.perception);
         let xDif = dist[0] - this.cubes[i].position.x;
         let zDif = dist[2] - this.cubes[i].position.z;
-        if(Math.sqrt(xDif*xDif + zDif*zDif) > this.perception || dist[0] === -1 || dist[1] === -1 || dist[2] === -1) return;
+        if(dist[0] === -1) return;
+
         const points = [];
         points.push(new THREE.Vector3(this.cubes[i].position.x, this.cubes[i].position.y, this.cubes[i].position.z));
         points.push(new THREE.Vector3(dist[0], dist[1], dist[2]));
@@ -138,6 +142,7 @@ class Alien {
         const line = new THREE.Line(geometry, this.cubeMat);
         scene.add(line);
         fightLines.push(line);
+
         let combatant = alienLookup.get(map[dist[0]][dist[2]][dist[1]].material.color);
         if(inputEnergy > combatant.defaultCombatEnergy) {
             scene.remove(map[dist[0]][dist[2]][dist[1]]);
@@ -234,12 +239,6 @@ class Alien {
     }
 
     getMove(i) {
-        if(this.energy <= 0) {
-            Aliens.splice(Aliens.indexOf(this),1);
-            for(var i = 0; i < this.cubes.length; i++) {
-                scene.remove(this.cubes[i]);
-            }
-        }
         if(this.cubes[i] == undefined) return;
         // console.log(distanceToNearestAlien(this.cubes[i]));
         let move = this.executeCode(this.moveCode, i); //this will be the final command found

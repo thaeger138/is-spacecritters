@@ -16,6 +16,11 @@
 			<label for="alienActionCode", style="color:white;">Action Code:</label>
 			<textarea id="alienActionCode" name="alienActionCode" rows="3" cols="40">harvest</textarea>
 			<br></br>
+			<label for="initPerception", style="color:white;">Perception:</label>
+			<textarea id="initPerception" name="initPerception" rows="1" cols="5">3</textarea>
+			<label for="initDCE", style="color:white;">Default Combat Energy:</label>
+			<textarea id="initDCE" name="initDCE" rows="1" cols="5">1</textarea>
+			<br></br>
 			<button onclick="runGame()">Run</button>
 			<button onclick="stop()">Stop</button><br></br>
 			<label for="checkbox", style="color:white;">Toggle energy map:</label>
@@ -40,7 +45,7 @@
 			var energyMapCubes = [];
 			var alienLookup = new Map();
 			var storedMoveCode = ["if [dist star < 2 & id % 2] skip random", "random"];
-			var storedActionCode = ["if [energy > 50 & alienCount < 100] duplicate if [dist alien <= 3 & energy > 50] fight 5 harvest", "harvest"];
+			var storedActionCode = ["if [energy > 50 & alienCount < 100] duplicate if [dist alien <= perception & energy > 15] fight 5 harvest", "harvest"];
 
 			const scene = new THREE.Scene();
 			const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 100 );
@@ -101,9 +106,12 @@
 			}
 			console.log(stars);
 
-			var myAlien = new Alien(0xff00ff, 1, 2);
+			//init my alien
+			let myPerception = parseInt(document.getElementById("initPerception").value);
+			let myDCE = parseInt(document.getElementById("initDCE").value);
+			var myAlien = new Alien(0xff00ff, myPerception, myDCE);
 			// var myAlien = new Alien(0xffffff, 1, 2);
-			var gorg = new Alien(0x00ffcd, 1, 2);
+			var gorg = new Alien(0x00ffcd, 1, 3);
 			// var borg = new Alien(0x4efc03, 3, 2);
 			// var florg = new Alien(0x00c300, 10, 1)
 			var Aliens = [myAlien, gorg];
@@ -126,6 +134,12 @@
 				resetTurn();
 				// console.timeEnd('resetTurn');
 				for(var i = 0; i < Aliens.length; i++) {
+					if(Aliens[i].energy <= 0 || Aliens[i].cubes.length === 0) {
+						Aliens.splice(i,1);
+						for(var j = 0; j < Aliens[i].cubes.length; j++) {
+							scene.remove(Aliens[i].cubes[j]);
+						}
+					}
 					Aliens[i].executeMove();
 				}
 				for(var i = 0; i < Aliens.length; i++) {
@@ -133,8 +147,8 @@
 				}
 				renderer.render( scene, camera );
 				if(Aliens.length === 1) {
-					stop();
 					alert("An alien has won!");
+					stop();
 				}
 				// console.timeEnd('test');
 			}
